@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -10,7 +11,7 @@ using Vortice.Mathematics;
 namespace ShootingGame;
 
 /// <summary>
-/// Phase 2: indexed cube mesh, HLSL shaders, dynamic MVP constant buffer, depth test.
+/// Unit cube mesh with per-draw WVP + tint (all scene geometry is scaled/translated cubes).
 /// </summary>
 public sealed class IndexedCubeRenderer : IDisposable
 {
@@ -27,16 +28,17 @@ public sealed class IndexedCubeRenderer : IDisposable
 
     public IndexedCubeRenderer(ID3D11Device device)
     {
+        var white = new Color4(1f, 1f, 1f, 1f);
         ReadOnlySpan<CubeVertex> vertices =
         [
-            new(new Vector3(-0.5f, -0.5f, -0.5f), new Color4(1, 0, 0, 1)),
-            new(new Vector3(0.5f, -0.5f, -0.5f), new Color4(0, 1, 0, 1)),
-            new(new Vector3(0.5f, 0.5f, -0.5f), new Color4(0, 0, 1, 1)),
-            new(new Vector3(-0.5f, 0.5f, -0.5f), new Color4(1, 1, 0, 1)),
-            new(new Vector3(-0.5f, -0.5f, 0.5f), new Color4(1, 0, 1, 1)),
-            new(new Vector3(0.5f, -0.5f, 0.5f), new Color4(0, 1, 1, 1)),
-            new(new Vector3(0.5f, 0.5f, 0.5f), new Color4(1, 1, 1, 1)),
-            new(new Vector3(-0.5f, 0.5f, 0.5f), new Color4(0.5f, 0.5f, 0.5f, 1)),
+            new(new Vector3(-0.5f, -0.5f, -0.5f), white),
+            new(new Vector3(0.5f, -0.5f, -0.5f), white),
+            new(new Vector3(0.5f, 0.5f, -0.5f), white),
+            new(new Vector3(-0.5f, 0.5f, -0.5f), white),
+            new(new Vector3(-0.5f, -0.5f, 0.5f), white),
+            new(new Vector3(0.5f, -0.5f, 0.5f), white),
+            new(new Vector3(0.5f, 0.5f, 0.5f), white),
+            new(new Vector3(-0.5f, 0.5f, 0.5f), white),
         ];
 
         ReadOnlySpan<uint> indices =
@@ -52,7 +54,7 @@ public sealed class IndexedCubeRenderer : IDisposable
         _vertexBuffer = device.CreateBuffer(vertices, BindFlags.VertexBuffer);
         _indexBuffer = device.CreateBuffer(indices, BindFlags.IndexBuffer);
 
-        uint cbSize = (uint)Unsafe.SizeOf<Matrix4x4>();
+        uint cbSize = (uint)Unsafe.SizeOf<PerDrawConstants>();
         _constantBuffer = device.CreateBuffer(
             cbSize,
             BindFlags.ConstantBuffer,
@@ -66,7 +68,6 @@ public sealed class IndexedCubeRenderer : IDisposable
         _vertexShader = device.CreateVertexShader(vsBytecode.Span);
         _pixelShader = device.CreatePixelShader(psBytecode.Span);
 
-        // Vortice: (semantic, semanticIndex, format, alignedByteOffset, inputSlot).
         InputElementDescription[] inputElements =
         [
             new("POSITION", 0, Format.R32G32B32_Float, 0, 0),
@@ -91,7 +92,15 @@ public sealed class IndexedCubeRenderer : IDisposable
             });
     }
 
-    public unsafe void Draw(ID3D11DeviceContext context, int width, int height, float timeSeconds, in Matrix4x4 view)
+    public unsafe void Draw(
+        ID3D11DeviceContext context,
+        int width,
+        int height,
+        float simulationTimeSeconds,
+        in Matrix4x4 view,
+        List<SceneInstance> instances,
+        in Matrix4x4 handWorld,
+        in Color4 handTint)
     {
         if (width <= 0 || height <= 0)
         {
@@ -99,17 +108,8 @@ public sealed class IndexedCubeRenderer : IDisposable
         }
 
         float aspect = width / (float)height;
-        Matrix4x4 world = Matrix4x4.CreateRotationY(timeSeconds * 0.8f);
         Matrix4x4 proj = Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 4f, aspect, 0.1f, 100f);
 
-        // Row-vector convention to match row_major + mul(pos, WVP) in HLSL.
-        Matrix4x4 wvp = Matrix4x4.Multiply(Matrix4x4.Multiply(world, view), proj);
-
-        MappedSubresource mapped = context.Map(_constantBuffer, MapMode.WriteDiscard);
-        *(Matrix4x4*)mapped.DataPointer = wvp;
-        context.Unmap(_constantBuffer, 0);
-
-        context.VSSetConstantBuffer(0, _constantBuffer);
         context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         context.IASetInputLayout(_inputLayout);
         context.IASetVertexBuffer(0, _vertexBuffer, VertexStride);
@@ -122,6 +122,33 @@ public sealed class IndexedCubeRenderer : IDisposable
         context.OMSetDepthStencilState(_depthStencilState, 0);
         context.OMSetBlendState(null, null, uint.MaxValue);
 
+        for (int i = 0; i < instances.Count; i++)
+        {
+            SceneInstance inst = instances[i];
+            DrawOne(context, in inst.World, in view, in proj, in inst.Tint);
+        }
+
+        float warmth = 0.92f + 0.08f * MathF.Sin(simulationTimeSeconds * 3.1f);
+        var handFinal = new Color4(handTint.R * warmth, handTint.G * warmth, handTint.B * warmth, handTint.A);
+        DrawOne(context, in handWorld, in view, in proj, in handFinal);
+    }
+
+    private unsafe void DrawOne(
+        ID3D11DeviceContext context,
+        in Matrix4x4 world,
+        in Matrix4x4 view,
+        in Matrix4x4 proj,
+        in Color4 tint)
+    {
+        Matrix4x4 wvp = Matrix4x4.Multiply(Matrix4x4.Multiply(world, view), proj);
+
+        MappedSubresource mapped = context.Map(_constantBuffer, MapMode.WriteDiscard);
+        var data = (PerDrawConstants*)mapped.DataPointer;
+        data->WorldViewProjection = wvp;
+        data->Tint = tint;
+        context.Unmap(_constantBuffer, 0);
+
+        context.VSSetConstantBuffer(0, _constantBuffer);
         context.DrawIndexed(36, 0, 0);
     }
 
@@ -135,6 +162,13 @@ public sealed class IndexedCubeRenderer : IDisposable
         _constantBuffer.Dispose();
         _indexBuffer.Dispose();
         _vertexBuffer.Dispose();
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PerDrawConstants
+    {
+        public Matrix4x4 WorldViewProjection;
+        public Color4 Tint;
     }
 
     [StructLayout(LayoutKind.Sequential)]

@@ -1,6 +1,7 @@
 cbuffer PerFrame : register(b0)
 {
     row_major matrix WorldViewProjection;
+    float4 Tint;
 };
 
 struct VSInput
@@ -20,7 +21,7 @@ PSInput VSMain(VSInput input)
     PSInput output;
     float4 worldPos = float4(input.Position, 1.0f);
     output.Position = mul(worldPos, WorldViewProjection);
-    output.Color = input.Color;
+    output.Color = input.Color * Tint;
     return output;
 }
 

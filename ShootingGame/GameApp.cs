@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -55,10 +56,13 @@ public static class GameApp
                     uint windowId = SDL.GetWindowID(window);
                     var clock = Stopwatch.StartNew();
                     double previousSeconds = 0;
+                    var gameTime = new GameTime();
 
                     var camera = FpsCamera.CreateDefault();
                     var relativeMouse = true;
                     SDL.SetRelativeMouseMode(SDLBool.True);
+                    var sceneInstances = new List<SceneInstance>(96);
+                    var grounded = true;
 
                     SDLEvent evt = default;
                     var running = true;
@@ -132,6 +136,8 @@ public static class GameApp
                         double dt = t - previousSeconds;
                         previousSeconds = t;
 
+                        gameTime.AdvanceSimulation(dt);
+
                         int ww, wh;
                         SDL.GetWindowSize(window, &ww, &wh);
                         if (ww != gpu.Width || wh != gpu.Height)
@@ -150,20 +156,31 @@ public static class GameApp
                         int keyCountRaw = 0;
                         byte* keys = SDL.GetKeyboardState(&keyCountRaw);
                         int keyCount = keyCountRaw;
-                        camera.UpdateMovement((float)dt, keys, keyCount);
+                        camera.UpdateLocomotion((float)dt, keys, keyCount, SceneLevel.Colliders, ref grounded);
 
-                        Matrix4x4 view = camera.GetViewMatrix();
+                        Matrix4x4 view = camera.GetViewMatrix(camera.IsCrouching);
 
                         double fps = dt > 1e-6 ? 1.0 / dt : 0;
                         double ms = dt * 1000.0;
                         string mode = relativeMouse ? "look" : "ui";
+                        string gnd = grounded ? "ground" : "air";
+                        string cr = camera.IsCrouching ? "crouch" : "stand";
                         string title =
-                            $"ShootingGame | {fps:0} fps | {ms:0.###} ms | {ww}x{wh} | {mode} (Esc)";
+                            $"ShootingGame | {fps:0} fps | {ms:0.###} ms | {ww}x{wh} | sim {gameTime.SimulationTimeSeconds:0.00}s | {gnd} | {cr} | {mode} (Esc)";
                         SDL.SetWindowTitle(window, title);
 
-                        float pulse = 0.5f + 0.5f * MathF.Sin((float)(t * 2.0));
-                        var clear = new Color4(0.08f + 0.04f * pulse, 0.10f, 0.14f + 0.06f * pulse, 1f);
-                        gpu.RenderFrame(clear, ctx => cube.Draw(ctx, clientW, clientH, (float)t, view));
+                        float skyPulse = 0.5f + 0.5f * MathF.Sin((float)(t * 0.55));
+                        var clear = new Color4(
+                            0.06f + 0.02f * skyPulse,
+                            0.09f + 0.03f * skyPulse,
+                            0.16f + 0.04f * skyPulse,
+                            1f);
+                        float sim = gameTime.SimulationTimeSeconds;
+                        sceneInstances.Clear();
+                        SceneLevel.AppendDrawInstances(sim, sceneInstances);
+                        Matrix4x4 handWorld = camera.GetRightHandWorld(camera.IsCrouching, sim);
+                        var handTint = new Color4(0.93f, 0.74f, 0.63f, 1f);
+                        gpu.RenderFrame(clear, ctx => cube.Draw(ctx, clientW, clientH, sim, view, sceneInstances, in handWorld, in handTint));
                     }
                 }
                 finally
