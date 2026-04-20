@@ -84,13 +84,15 @@ public sealed class D3D11Host : IDisposable
         CreateSizeDependentResources(width, height);
     }
 
-    public void RenderFrame(Color4 clearColor)
+    public void RenderFrame(Color4 clearColor, Action<ID3D11DeviceContext>? draw = null)
     {
         Context.ClearRenderTargetView(_rtv, clearColor);
         Context.ClearDepthStencilView(_dsv, DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 1f, 0);
 
         Context.OMSetRenderTargets(_rtv, _dsv);
         Context.RSSetViewport(new Viewport(0, 0, Width, Height, 0f, 1f));
+
+        draw?.Invoke(Context);
 
         _ = _swapChain.Present(1, PresentFlags.None);
     }

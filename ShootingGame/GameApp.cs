@@ -49,6 +49,7 @@ public static class GameApp
                 {
                     nint hwnd = GetWin32Hwnd(window);
                     using var gpu = new D3D11Host(hwnd, InitialWidth, InitialHeight);
+                    using var cube = new IndexedCubeRenderer(gpu.Device);
 
                     uint windowId = SDL.GetWindowID(window);
                     var clock = Stopwatch.StartNew();
@@ -104,6 +105,9 @@ public static class GameApp
                             gpu.Resize(ww, wh);
                         }
 
+                        int clientW = ww;
+                        int clientH = wh;
+
                         double fps = dt > 1e-6 ? 1.0 / dt : 0;
                         double ms = dt * 1000.0;
                         string title = $"ShootingGame | {fps:0} fps | {ms:0.###} ms | {ww}x{wh}";
@@ -111,7 +115,7 @@ public static class GameApp
 
                         float pulse = 0.5f + 0.5f * MathF.Sin((float)(t * 2.0));
                         var clear = new Color4(0.08f + 0.04f * pulse, 0.10f, 0.14f + 0.06f * pulse, 1f);
-                        gpu.RenderFrame(clear);
+                        gpu.RenderFrame(clear, ctx => cube.Draw(ctx, clientW, clientH, (float)t));
                     }
                 }
                 finally
