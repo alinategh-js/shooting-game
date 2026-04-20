@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using Hexa.NET.SDL2;
 using Vortice.Mathematics;
@@ -55,11 +56,18 @@ public static class GameApp
                     var clock = Stopwatch.StartNew();
                     double previousSeconds = 0;
 
+                    var camera = FpsCamera.CreateDefault();
+                    var relativeMouse = true;
+                    SDL.SetRelativeMouseMode(SDLBool.True);
+
                     SDLEvent evt = default;
                     var running = true;
 
                     while (running)
                     {
+                        int mouseDx = 0;
+                        int mouseDy = 0;
+
                         SDL.PumpEvents();
                         while (SDL.PollEvent(ref evt) != 0)
                         {
@@ -72,6 +80,32 @@ public static class GameApp
                                 case SDLEventType.AppTerminating:
                                     running = false;
                                     break;
+
+                                case SDLEventType.Keydown:
+                                {
+                                    ref readonly var key = ref evt.Key;
+                                    if (key.WindowID == windowId
+                                        && key.Repeat == 0
+                                        && key.Keysym.Scancode == SDLScancode.Escape)
+                                    {
+                                        relativeMouse = !relativeMouse;
+                                        SDL.SetRelativeMouseMode(relativeMouse ? SDLBool.True : SDLBool.False);
+                                    }
+
+                                    break;
+                                }
+
+                                case SDLEventType.Mousemotion:
+                                {
+                                    ref readonly var motion = ref evt.Motion;
+                                    if (motion.WindowID == windowId)
+                                    {
+                                        mouseDx += motion.Xrel;
+                                        mouseDy += motion.Yrel;
+                                    }
+
+                                    break;
+                                }
 
                                 case SDLEventType.Windowevent:
                                     ref readonly var we = ref evt.Window;
@@ -108,18 +142,33 @@ public static class GameApp
                         int clientW = ww;
                         int clientH = wh;
 
+                        if (relativeMouse)
+                        {
+                            camera.ApplyMouseLook(mouseDx, mouseDy);
+                        }
+
+                        int keyCountRaw = 0;
+                        byte* keys = SDL.GetKeyboardState(&keyCountRaw);
+                        int keyCount = keyCountRaw;
+                        camera.UpdateMovement((float)dt, keys, keyCount);
+
+                        Matrix4x4 view = camera.GetViewMatrix();
+
                         double fps = dt > 1e-6 ? 1.0 / dt : 0;
                         double ms = dt * 1000.0;
-                        string title = $"ShootingGame | {fps:0} fps | {ms:0.###} ms | {ww}x{wh}";
+                        string mode = relativeMouse ? "look" : "ui";
+                        string title =
+                            $"ShootingGame | {fps:0} fps | {ms:0.###} ms | {ww}x{wh} | {mode} (Esc)";
                         SDL.SetWindowTitle(window, title);
 
                         float pulse = 0.5f + 0.5f * MathF.Sin((float)(t * 2.0));
                         var clear = new Color4(0.08f + 0.04f * pulse, 0.10f, 0.14f + 0.06f * pulse, 1f);
-                        gpu.RenderFrame(clear, ctx => cube.Draw(ctx, clientW, clientH, (float)t));
+                        gpu.RenderFrame(clear, ctx => cube.Draw(ctx, clientW, clientH, (float)t, view));
                     }
                 }
                 finally
                 {
+                    SDL.SetRelativeMouseMode(SDLBool.False);
                     SDL.DestroyWindow(window);
                 }
             }

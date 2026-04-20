@@ -91,7 +91,7 @@ public sealed class IndexedCubeRenderer : IDisposable
             });
     }
 
-    public unsafe void Draw(ID3D11DeviceContext context, int width, int height, float timeSeconds)
+    public unsafe void Draw(ID3D11DeviceContext context, int width, int height, float timeSeconds, in Matrix4x4 view)
     {
         if (width <= 0 || height <= 0)
         {
@@ -100,7 +100,6 @@ public sealed class IndexedCubeRenderer : IDisposable
 
         float aspect = width / (float)height;
         Matrix4x4 world = Matrix4x4.CreateRotationY(timeSeconds * 0.8f);
-        Matrix4x4 view = Matrix4x4.CreateLookAt(new Vector3(0f, 1.2f, -3.5f), new Vector3(0f, 0f, 0f), Vector3.UnitY);
         Matrix4x4 proj = Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 4f, aspect, 0.1f, 100f);
 
         // Row-vector convention to match row_major + mul(pos, WVP) in HLSL.
