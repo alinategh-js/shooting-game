@@ -27,7 +27,8 @@ public struct FpsCamera
 
     public void ApplyMouseLook(int deltaX, int deltaY)
     {
-        Yaw += deltaX * MouseSensitivity;
+        // Negate horizontal delta so "mouse right" turns view right (matches typical FPS feel on Windows).
+        Yaw -= deltaX * MouseSensitivity;
         Pitch -= deltaY * MouseSensitivity;
         float limit = MathF.PI / 2f - 0.01f;
         Pitch = Math.Clamp(Pitch, -limit, limit);
@@ -61,7 +62,8 @@ public struct FpsCamera
             forwardFlat = Vector3.Normalize(forwardFlat);
         }
 
-        var rightFlat = new Vector3(cy, 0f, -sy);
+        // Right = forward × worldUp (Y). Previous (cos, 0, -sin) was the opposite sign, swapping A/D.
+        var rightFlat = Vector3.Normalize(Vector3.Cross(forwardFlat, Vector3.UnitY));
         var move = Vector3.Zero;
         if (Down(SDLScancode.W))
         {
