@@ -1,0 +1,151 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Hexa.NET.SDL2;
+using Vortice.Mathematics;
+
+namespace ShootingGame;
+
+/// <summary>
+/// SDL2 window + main loop: pump events, measure frame time, drive D3D11 clear/present.
+/// </summary>
+public static class GameApp
+{
+    private const int InitialWidth = 1280;
+    private const int InitialHeight = 720;
+
+    // SDL_WINDOWPOS_CENTERED (see SDL_video.h)
+    private static readonly int WindowPosCentered = unchecked((int)SDL.SDL_WINDOWPOS_CENTERED_MASK);
+
+    private static string GetSdlErrorString()
+        => SDL.GetErrorAsException()?.Message ?? string.Empty;
+
+    public static void Run()
+    {
+        SDL.SetHint(SDL.SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
+
+        if (SDL.Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS) != 0)
+        {
+            throw new InvalidOperationException($"SDL_Init failed: {GetSdlErrorString()}");
+        }
+
+        try
+        {
+            unsafe
+            {
+                SDLWindow* window = SDL.CreateWindow(
+                    "ShootingGame",
+                    WindowPosCentered,
+                    WindowPosCentered,
+                    InitialWidth,
+                    InitialHeight,
+                    (uint)(SDLWindowFlags.Resizable | SDLWindowFlags.Shown));
+
+                if (window == null)
+                {
+                    throw new InvalidOperationException($"SDL_CreateWindow failed: {GetSdlErrorString()}");
+                }
+
+                try
+                {
+                    nint hwnd = GetWin32Hwnd(window);
+                    using var gpu = new D3D11Host(hwnd, InitialWidth, InitialHeight);
+
+                    uint windowId = SDL.GetWindowID(window);
+                    var clock = Stopwatch.StartNew();
+                    double previousSeconds = 0;
+
+                    SDLEvent evt = default;
+                    var running = true;
+
+                    while (running)
+                    {
+                        SDL.PumpEvents();
+                        while (SDL.PollEvent(ref evt) != 0)
+                        {
+                            switch ((SDLEventType)evt.Type)
+                            {
+                                case SDLEventType.Quit:
+                                    running = false;
+                                    break;
+
+                                case SDLEventType.AppTerminating:
+                                    running = false;
+                                    break;
+
+                                case SDLEventType.Windowevent:
+                                    ref readonly var we = ref evt.Window;
+                                    if (we.WindowID == windowId)
+                                    {
+                                        var wid = (SDLWindowEventID)we.Event;
+                                        if (wid == SDLWindowEventID.Close)
+                                        {
+                                            running = false;
+                                        }
+                                        else if (wid is SDLWindowEventID.Resized or SDLWindowEventID.SizeChanged)
+                                        {
+                                            int w = we.Data1;
+                                            int h = we.Data2;
+                                            gpu.Resize(w, h);
+                                        }
+                                    }
+
+                                    break;
+                            }
+                        }
+
+                        double t = clock.Elapsed.TotalSeconds;
+                        double dt = t - previousSeconds;
+                        previousSeconds = t;
+
+                        int ww, wh;
+                        SDL.GetWindowSize(window, &ww, &wh);
+                        if (ww != gpu.Width || wh != gpu.Height)
+                        {
+                            gpu.Resize(ww, wh);
+                        }
+
+                        double fps = dt > 1e-6 ? 1.0 / dt : 0;
+                        double ms = dt * 1000.0;
+                        string title = $"ShootingGame | {fps:0} fps | {ms:0.###} ms | {ww}x{wh}";
+                        SDL.SetWindowTitle(window, title);
+
+                        float pulse = 0.5f + 0.5f * MathF.Sin((float)(t * 2.0));
+                        var clear = new Color4(0.08f + 0.04f * pulse, 0.10f, 0.14f + 0.06f * pulse, 1f);
+                        gpu.RenderFrame(clear);
+                    }
+                }
+                finally
+                {
+                    SDL.DestroyWindow(window);
+                }
+            }
+        }
+        finally
+        {
+            SDL.Quit();
+        }
+    }
+
+    private static unsafe nint GetWin32Hwnd(SDLWindow* window)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            throw new PlatformNotSupportedException("This bootstrap path is Windows-first (HWND + D3D11).");
+        }
+
+        var wmInfo = new SDLSysWMInfo();
+        SDL.GetVersion(ref wmInfo.Version);
+
+        if (SDL.GetWindowWMInfo(window, ref wmInfo) != SDLBool.True)
+        {
+            throw new InvalidOperationException($"SDL_GetWindowWMInfo failed: {GetSdlErrorString()}");
+        }
+
+        if (wmInfo.Subsystem != SdlSyswmType.Windows)
+        {
+            throw new InvalidOperationException($"Expected Win32 subsystem, got {wmInfo.Subsystem}.");
+        }
+
+        return wmInfo.Info.Win.Window;
+    }
+}

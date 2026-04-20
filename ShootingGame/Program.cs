@@ -1,0 +1,3 @@
+using ShootingGame;
+
+GameApp.Run();
