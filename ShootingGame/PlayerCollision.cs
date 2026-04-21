@@ -168,4 +168,6 @@ public readonly struct PlayerColliderDims
 
     public static PlayerColliderDims Standing => new(0.28f, 0.28f, 1.78f);
     public static PlayerColliderDims Crouching => new(0.28f, 0.28f, 1.05f);
+
+    public static PlayerColliderDims WithHeight(float height) => new(0.28f, 0.28f, height);
 }

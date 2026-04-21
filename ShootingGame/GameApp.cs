@@ -63,6 +63,7 @@ public static class GameApp
                     SDL.SetRelativeMouseMode(SDLBool.True);
                     var sceneInstances = new List<SceneInstance>(96);
                     var grounded = true;
+                    var handInstances = new List<SceneInstance>(32);
 
                     SDLEvent evt = default;
                     var running = true;
@@ -158,7 +159,7 @@ public static class GameApp
                         int keyCount = keyCountRaw;
                         camera.UpdateLocomotion((float)dt, keys, keyCount, SceneLevel.Colliders, ref grounded);
 
-                        Matrix4x4 view = camera.GetViewMatrix(camera.IsCrouching);
+                        Matrix4x4 view = camera.GetViewMatrix();
 
                         double fps = dt > 1e-6 ? 1.0 / dt : 0;
                         double ms = dt * 1000.0;
@@ -178,9 +179,9 @@ public static class GameApp
                         float sim = gameTime.SimulationTimeSeconds;
                         sceneInstances.Clear();
                         SceneLevel.AppendDrawInstances(sim, sceneInstances);
-                        Matrix4x4 handWorld = camera.GetRightHandWorld(camera.IsCrouching, sim);
-                        var handTint = new Color4(0.93f, 0.74f, 0.63f, 1f);
-                        gpu.RenderFrame(clear, ctx => cube.Draw(ctx, clientW, clientH, sim, view, sceneInstances, in handWorld, in handTint));
+                        handInstances.Clear();
+                        camera.AppendRightHandInstances(handInstances, sim);
+                        gpu.RenderFrame(clear, ctx => cube.Draw(ctx, clientW, clientH, sim, view, sceneInstances, handInstances));
                     }
                 }
                 finally
