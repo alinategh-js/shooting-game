@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace ShootingGame.Voxel;
+namespace ShootingEngine.Voxel;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct VoxelRgbA : IEquatable<VoxelRgbA>
@@ -32,3 +32,4 @@ public struct VoxelRgbA : IEquatable<VoxelRgbA>
 
     public override int GetHashCode() => HashCode.Combine(R, G, B, A);
 }
+

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace ShootingGame.Voxel;
+namespace ShootingEngine.Voxel;
 
 /// <summary>
 /// Read/write access to a finite 3D voxel grid. Today we only ship a dense RGBA implementation,
@@ -17,3 +17,4 @@ public interface IVoxelVolume
 
     bool InBounds(int x, int y, int z);
 }
+

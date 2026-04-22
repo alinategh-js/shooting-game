@@ -8,7 +8,7 @@ using Vortice.D3DCompiler;
 using Vortice.DXGI;
 using Vortice.Mathematics;
 
-namespace ShootingGame;
+namespace ShootingEngine.Graphics;
 
 /// <summary>
 /// Unit cube mesh with per-draw WVP + tint (all scene geometry is scaled/translated cubes).
@@ -182,7 +182,7 @@ public sealed class IndexedCubeRenderer : IDisposable
         for (int i = 0; i < instances.Count; i++)
         {
             SceneInstance inst = instances[i];
-            DrawOne(context, in inst.World, in view, in proj, in inst.Tint);
+            DrawOne(context, in inst.World, in inst.Tint, in view, in proj);
         }
 
         if (alphaOverlays is { Count: > 0 })
@@ -191,42 +191,35 @@ public sealed class IndexedCubeRenderer : IDisposable
             context.OMSetBlendState(_alphaBlendState, new Color4(0, 0, 0, 0), uint.MaxValue);
             for (int i = 0; i < alphaOverlays.Count; i++)
             {
-                SceneInstance a = alphaOverlays[i];
-                DrawOne(context, in a.World, in view, in proj, in a.Tint);
+                SceneInstance inst = alphaOverlays[i];
+                DrawOne(context, in inst.World, in inst.Tint, in view, in proj);
             }
 
             context.OMSetBlendState(null, null, uint.MaxValue);
             context.OMSetDepthStencilState(_depthStencilState, 0);
         }
 
-        context.OMSetDepthStencilState(_handDepthStencilState, 0);
+        // Hand/viewmodel
         context.RSSetState(_handRasterizerState);
+        context.OMSetDepthStencilState(_handDepthStencilState, 0);
         for (int i = 0; i < handInstances.Count; i++)
         {
-            SceneInstance h = handInstances[i];
-            DrawOne(context, in h.World, in view, in proj, in h.Tint);
+            SceneInstance inst = handInstances[i];
+            DrawOne(context, in inst.World, in inst.Tint, in view, in proj);
         }
-        context.RSSetState(_rasterizerState);
-        context.OMSetDepthStencilState(_depthStencilState, 0);
     }
 
-    private unsafe void DrawOne(
-        ID3D11DeviceContext context,
-        in Matrix4x4 world,
-        in Matrix4x4 view,
-        in Matrix4x4 proj,
-        in Color4 tint)
+    private unsafe void DrawOne(ID3D11DeviceContext context, in Matrix4x4 world, in Color4 tint, in Matrix4x4 view, in Matrix4x4 proj)
     {
-        Matrix4x4 wvp = Matrix4x4.Multiply(Matrix4x4.Multiply(world, view), proj);
+        Matrix4x4 wvp = world * view * proj;
+        var cb = new PerDrawConstants(wvp, tint);
 
         MappedSubresource mapped = context.Map(_constantBuffer, MapMode.WriteDiscard);
-        var data = (PerDrawConstants*)mapped.DataPointer;
-        data->World = world;
-        data->WorldViewProjection = wvp;
-        data->Tint = tint;
+        Unsafe.WriteUnaligned(mapped.DataPointer.ToPointer(), cb);
         context.Unmap(_constantBuffer, 0);
 
         context.VSSetConstantBuffer(0, _constantBuffer);
+        context.PSSetConstantBuffer(0, _constantBuffer);
         context.DrawIndexed(CubeIndexCount, 0, 0);
     }
 
@@ -234,8 +227,8 @@ public sealed class IndexedCubeRenderer : IDisposable
     {
         _alphaBlendState.Dispose();
         _depthReadOnlyState.Dispose();
-        _depthStencilState.Dispose();
         _handDepthStencilState.Dispose();
+        _depthStencilState.Dispose();
         _handRasterizerState.Dispose();
         _rasterizerState.Dispose();
         _inputLayout.Dispose();
@@ -247,11 +240,16 @@ public sealed class IndexedCubeRenderer : IDisposable
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct PerDrawConstants
+    private readonly struct PerDrawConstants
     {
-        public Matrix4x4 World;
-        public Matrix4x4 WorldViewProjection;
-        public Color4 Tint;
+        public readonly Matrix4x4 WorldViewProj;
+        public readonly Color4 Tint;
+
+        public PerDrawConstants(Matrix4x4 worldViewProj, Color4 tint)
+        {
+            WorldViewProj = worldViewProj;
+            Tint = tint;
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -269,3 +267,4 @@ public sealed class IndexedCubeRenderer : IDisposable
         }
     }
 }
+

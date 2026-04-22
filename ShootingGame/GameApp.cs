@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Hexa.NET.SDL2;
+using ShootingEngine.Core;
+using ShootingEngine.Graphics;
 using Vortice.Mathematics;
 
 namespace ShootingGame;

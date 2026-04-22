@@ -7,7 +7,7 @@ using Vortice.D3DCompiler;
 using Vortice.DXGI;
 using Vortice.Mathematics;
 
-namespace ShootingGame.Editor;
+namespace ShootingEngine.Graphics;
 
 /// <summary>
 /// Immediate-mode 2D UI triangles in clip space (z=0, w=1). Draw after the 3D scene with depth disabled.
@@ -113,3 +113,4 @@ public struct UiVertex
         Color = color;
     }
 }
+

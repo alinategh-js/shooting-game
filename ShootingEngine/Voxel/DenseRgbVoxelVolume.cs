@@ -1,4 +1,4 @@
-namespace ShootingGame.Voxel;
+namespace ShootingEngine.Voxel;
 
 /// <summary>
 /// Dense RGBA storage. Alpha 0 means air. This is intentionally simple for MVP IO and tooling.
@@ -65,3 +65,4 @@ public sealed class DenseRgbVoxelVolume : IVoxelVolume
         return v;
     }
 }
+

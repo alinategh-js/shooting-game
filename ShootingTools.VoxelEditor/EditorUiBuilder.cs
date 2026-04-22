@@ -1,7 +1,8 @@
 using System.Numerics;
+using ShootingEngine.Graphics;
 using Vortice.Mathematics;
 
-namespace ShootingGame.Editor;
+namespace ShootingTools.VoxelEditor;
 
 public enum VoxelEditorToolKind
 {
@@ -356,3 +357,4 @@ public static class EditorUiBuilder
         };
     }
 }
+
