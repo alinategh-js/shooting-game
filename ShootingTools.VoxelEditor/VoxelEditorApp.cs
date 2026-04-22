@@ -4,14 +4,15 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 using Hexa.NET.SDL2;
-using ShootingGame.Editor;
-using ShootingGame.Voxel;
+using ShootingEngine.Cameras;
+using ShootingEngine.Graphics;
+using ShootingEngine.Voxel;
 using Vortice.Mathematics;
 
-namespace ShootingGame;
+namespace ShootingTools.VoxelEditor;
 
 /// <summary>
-/// Developer-only voxel object editor. Run with <c>--voxel-editor</c> on the command line.
+/// Developer voxel object editor.
 /// </summary>
 public static class VoxelEditorApp
 {
@@ -40,7 +41,7 @@ public static class VoxelEditorApp
             unsafe
             {
                 SDLWindow* window = SDL.CreateWindow(
-                    "ShootingGame — Voxel Editor (developer)",
+                    "Voxel Editor (developer)",
                     WindowPosCentered,
                     WindowPosCentered,
                     InitialWidth,
@@ -76,18 +77,9 @@ public static class VoxelEditorApp
 
                     baker.Rebuild(volume, CellSize, instances);
 
-                    var orbit = new OrbitCamera
-                    {
-                        Yaw = 0.9f,
-                        Pitch = 0.35f,
-                        Distance = 9.5f,
-                        Target = Vector3.Zero,
-                    };
-
                     int mouseX = 0;
                     int mouseY = 0;
                     bool lmbHeld = false;
-                    bool rmbHeld = false;
                     byte cr = (byte)(palette[0].R * 255f);
                     byte cg = (byte)(palette[0].G * 255f);
                     byte cb = (byte)(palette[0].B * 255f);
@@ -109,13 +101,21 @@ public static class VoxelEditorApp
                     var worldMin = new Vector3(-extent, -extent, -extent);
                     var worldMax = new Vector3(extent, extent, extent);
 
+                    var cam = FlyCamera.CreateDefault(new Vector3(0f, -extent * 0.35f, -extent * 1.6f));
+                    cam.Yaw = 0.6f;
+                    cam.Pitch = 0.15f;
+
                     SDLEvent evt = default;
                     var running = true;
 
                     while (running)
                     {
                         double t = clock.Elapsed.TotalSeconds;
+                        double dt = t - previousSeconds;
                         previousSeconds = t;
+
+                        int mouseDx = 0;
+                        int mouseDy = 0;
 
                         SDL.PumpEvents();
                         while (SDL.PollEvent(ref evt) != 0)
@@ -204,7 +204,7 @@ public static class VoxelEditorApp
                                         }
                                         else if (btn == 3u)
                                         {
-                                            rmbHeld = true;
+                                            // RMB reserved (no-op for now)
                                         }
                                     }
 
@@ -223,7 +223,7 @@ public static class VoxelEditorApp
                                         }
                                         else if (btn == 3u)
                                         {
-                                            rmbHeld = false;
+                                            // RMB reserved (no-op for now)
                                         }
                                     }
 
@@ -238,17 +238,10 @@ public static class VoxelEditorApp
                                         mouseX = m.X;
                                         mouseY = m.Y;
 
-                                        if (rmbHeld)
+                                        if (relativeMouse)
                                         {
-                                            int mww, mwh;
-                                            SDL.GetWindowSize(window, &mww, &mwh);
-                                            if (EditorUiBuilder.IsIn3DViewport(mww, mouseX, mouseY))
-                                            {
-                                                orbit.Yaw -= m.Xrel * 0.0045f;
-                                                orbit.Pitch -= m.Yrel * 0.0045f;
-                                                float lim = MathF.PI / 2f - 0.08f;
-                                                orbit.Pitch = Math.Clamp(orbit.Pitch, -lim, lim);
-                                            }
+                                            mouseDx += m.Xrel;
+                                            mouseDy += m.Yrel;
                                         }
                                     }
 
@@ -261,8 +254,8 @@ public static class VoxelEditorApp
                                     if (w.WindowID == windowId)
                                     {
                                         float dy = w.PreciseY != 0f ? w.PreciseY : w.Y;
-                                        orbit.Distance *= MathF.Exp(-dy * 0.12f);
-                                        orbit.Distance = Math.Clamp(orbit.Distance, 2.5f, 80f);
+                                        cam.BaseSpeed *= MathF.Exp(dy * 0.08f);
+                                        cam.BaseSpeed = Math.Clamp(cam.BaseSpeed, 0.4f, 50f);
                                     }
 
                                     break;
@@ -292,6 +285,12 @@ public static class VoxelEditorApp
                         int keyCount = keyCountRaw;
                         AdjustColorFromKeys(keys, keyCount, ref channel, ref cr, ref cg, ref cb);
 
+                        cam.UpdateMovement((float)dt, keys, keyCount);
+                        if (relativeMouse)
+                        {
+                            cam.ApplyMouseLook(mouseDx, mouseDy);
+                        }
+
                         int ww, wh;
                         SDL.GetWindowSize(window, &ww, &wh);
                         if (ww != gpu.Width || wh != gpu.Height)
@@ -299,7 +298,7 @@ public static class VoxelEditorApp
                             gpu.Resize(ww, wh);
                         }
 
-                        Matrix4x4 view = orbit.GetViewMatrix();
+                        Matrix4x4 view = cam.GetViewMatrix();
                         float aspect = ww / (float)Math.Max(1, wh);
                         Matrix4x4 proj = Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 4f, aspect, 0.05f, CameraFarClip);
 
@@ -389,7 +388,7 @@ public static class VoxelEditorApp
                             .Append(" | ").Append(tool)
                             .Append(" | RGB(").Append(cr).Append(',').Append(cg).Append(',').Append(cb).Append(')')
                             .Append(" | ch=").Append(ch)
-                            .Append(" | Ctrl+S/O save/load | F5/F9 | Esc mouse | Tab ch")
+                            .Append(" | Ctrl+S/O save/load | F5/F9 | Esc mouse | Tab ch | WASD/QE move")
                             .Append(warn)
                             .ToString();
                         SDL.SetWindowTitle(window, title);
@@ -401,7 +400,7 @@ public static class VoxelEditorApp
                         {
                             cube.Draw(ctx, clientW, clientH, (float)t, view, instances, handEmpty, ghostInstances, CameraFarClip);
                             lineBox.DrawWireBox(ctx, in view, in proj, in worldMin, in worldMax, new Color4(1f, 1f, 1f, 0.55f));
-                            ui.Draw(ctx, CollectionsMarshal.AsSpan(uiVerts));
+                            ui.Draw(ctx, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(uiVerts));
                         });
                     }
                 }
@@ -523,26 +522,6 @@ public static class VoxelEditorApp
         }
     }
 
-    private struct OrbitCamera
-    {
-        public float Yaw;
-        public float Pitch;
-        public float Distance;
-        public Vector3 Target;
-
-        public readonly Matrix4x4 GetViewMatrix()
-        {
-            float cp = MathF.Cos(Pitch);
-            float sp = MathF.Sin(Pitch);
-            float cy = MathF.Cos(Yaw);
-            float sy = MathF.Sin(Yaw);
-
-            Vector3 offset = new(sy * cp * Distance, sp * Distance, cy * cp * Distance);
-            Vector3 eye = Target + offset;
-            return Matrix4x4.CreateLookAt(eye, Target, Vector3.UnitY);
-        }
-    }
-
     private static unsafe nint GetWin32Hwnd(SDLWindow* window)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -566,3 +545,4 @@ public static class VoxelEditorApp
         return wmInfo.Info.Win.Window;
     }
 }
+

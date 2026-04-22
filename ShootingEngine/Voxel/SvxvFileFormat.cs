@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 
-namespace ShootingGame.Voxel;
+namespace ShootingEngine.Voxel;
 
 /// <summary>
 /// Versioned dense voxel object file (.svxv). Header is fixed-size; payload is raw RGBA bytes in X-fastest order.
@@ -119,3 +119,4 @@ public static class SvxvFileFormat
         sizeZ = BinaryPrimitives.ReadUInt16LittleEndian(headerPrefix.Slice(10));
     }
 }
+

@@ -1,4 +1,4 @@
-namespace ShootingGame;
+namespace ShootingEngine.Core;
 
 /// <summary>
 /// Phase 4: fixed simulation timestep with an accumulator (common game-loop pattern).
@@ -48,3 +48,4 @@ public sealed class GameTime
         }
     }
 }
+

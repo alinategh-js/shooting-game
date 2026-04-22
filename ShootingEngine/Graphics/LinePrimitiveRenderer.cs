@@ -7,7 +7,7 @@ using Vortice.D3DCompiler;
 using Vortice.DXGI;
 using Vortice.Mathematics;
 
-namespace ShootingGame.Editor;
+namespace ShootingEngine.Graphics;
 
 /// <summary>
 /// Draws axis-aligned box edges in world space (line list). Separate from voxel cubes for clarity/refactors.
@@ -18,6 +18,7 @@ public sealed class LinePrimitiveRenderer : IDisposable
 
     private readonly ID3D11Buffer _vertexBuffer;
     private readonly ID3D11Buffer _indexBuffer;
+    private readonly int _indexCount;
     private readonly ID3D11Buffer _constantBuffer;
     private readonly ID3D11VertexShader _vs;
     private readonly ID3D11PixelShader _ps;
@@ -47,13 +48,15 @@ public sealed class LinePrimitiveRenderer : IDisposable
 
         ReadOnlySpan<uint> idx =
         [
-            0, 1, 1, 2, 2, 3, 3, 0,
-            4, 5, 5, 6, 6, 7, 7, 4,
-            0, 4, 1, 5, 2, 6, 3, 7,
+            // Open bounds: keep the bottom rectangle and 3 vertical edges.
+            // This removes the top face and opens two adjacent sides (voxel-editor friendly).
+            0, 1, 1, 5, 5, 4, 4, 0, // bottom perimeter
+            0, 3, 1, 2, 4, 7,       // vertical edges
         ];
 
         _vertexBuffer = device.CreateBuffer(verts, BindFlags.VertexBuffer);
         _indexBuffer = device.CreateBuffer(idx, BindFlags.IndexBuffer);
+        _indexCount = idx.Length;
 
         uint cbSize = (uint)Unsafe.SizeOf<LineConstants>();
         _constantBuffer = device.CreateBuffer(cbSize, BindFlags.ConstantBuffer, ResourceUsage.Dynamic, CpuAccessFlags.Write);
@@ -113,7 +116,7 @@ public sealed class LinePrimitiveRenderer : IDisposable
         context.OMSetDepthStencilState(_depth, 0);
         context.OMSetBlendState(null, null, uint.MaxValue);
 
-        context.DrawIndexed(24, 0, 0);
+        context.DrawIndexed((uint)_indexCount, 0, 0);
     }
 
     public void Dispose()
@@ -135,3 +138,4 @@ public sealed class LinePrimitiveRenderer : IDisposable
         public Color4 Color;
     }
 }
+

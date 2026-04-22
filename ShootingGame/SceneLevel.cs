@@ -1,4 +1,5 @@
 using System.Numerics;
+using ShootingEngine.Graphics;
 using Vortice.Mathematics;
 
 namespace ShootingGame;
@@ -146,14 +147,4 @@ public static class SceneLevel
     }
 }
 
-public readonly struct SceneInstance
-{
-    public readonly Matrix4x4 World;
-    public readonly Color4 Tint;
-
-    public SceneInstance(Matrix4x4 world, Color4 tint)
-    {
-        World = world;
-        Tint = tint;
-    }
-}
+// SceneInstance lives in ShootingEngine.Graphics

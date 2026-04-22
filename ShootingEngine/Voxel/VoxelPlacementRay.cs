@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace ShootingGame.Voxel;
+namespace ShootingEngine.Voxel;
 
 /// <summary>
 /// Computes where a 1×1×1 voxel should be placed from a view ray (last air cell before the first solid),
@@ -124,3 +124,4 @@ public static class VoxelPlacementRay
         return false;
     }
 }
+

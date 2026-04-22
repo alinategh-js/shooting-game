@@ -5,7 +5,7 @@ using Vortice.Mathematics;
 using static Vortice.Direct3D11.D3D11;
 using static Vortice.DXGI.DXGI;
 
-namespace ShootingGame;
+namespace ShootingEngine.Graphics;
 
 /// <summary>
 /// Owns the D3D11 device, swap chain, back-buffer RTV, and a matching depth buffer.
@@ -158,3 +158,4 @@ public sealed class D3D11Host : IDisposable
         _backBuffer.Dispose();
     }
 }
+

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace ShootingGame.Voxel;
+namespace ShootingEngine.Voxel;
 
 /// <summary>
 /// Grid ray traversal in a coordinate system where voxel (0,0,0) occupies world
@@ -185,3 +185,4 @@ public static class VoxelGridRay
         return false;
     }
 }
+

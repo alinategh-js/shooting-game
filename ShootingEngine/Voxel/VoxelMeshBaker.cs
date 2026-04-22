@@ -1,7 +1,7 @@
 using System.Numerics;
 using Vortice.Mathematics;
 
-namespace ShootingGame.Voxel;
+namespace ShootingEngine.Voxel;
 
 /// <summary>
 /// Converts an <see cref="IVoxelVolume"/> into draw instances (unit cubes). This is the main seam
@@ -26,7 +26,7 @@ public sealed class VoxelMeshBaker
             (z - hz + 0.5f) * cellSize);
     }
 
-    public void Rebuild(IVoxelVolume volume, float cellSize, List<SceneInstance> outInstances)
+    public void Rebuild(IVoxelVolume volume, float cellSize, List<Graphics.SceneInstance> outInstances)
     {
         ArgumentNullException.ThrowIfNull(volume);
         ArgumentNullException.ThrowIfNull(outInstances);
@@ -34,26 +34,26 @@ public sealed class VoxelMeshBaker
         outInstances.Clear();
         TruncatedLastBuild = false;
 
-                    int count = 0;
-                    for (int z = 0; z < volume.SizeZ; z++)
+        int count = 0;
+        for (int z = 0; z < volume.SizeZ; z++)
+        {
+            for (int y = 0; y < volume.SizeY; y++)
+            {
+                for (int x = 0; x < volume.SizeX; x++)
+                {
+                    VoxelRgbA v = volume.Get(x, y, z);
+                    if (v.IsAir)
                     {
-                        for (int y = 0; y < volume.SizeY; y++)
-                        {
-                            for (int x = 0; x < volume.SizeX; x++)
-                            {
-                                VoxelRgbA v = volume.Get(x, y, z);
-                                if (v.IsAir)
-                                {
-                                    continue;
-                                }
+                        continue;
+                    }
 
-                                if (count >= MaxInstances)
-                                {
-                                    TruncatedLastBuild = true;
-                                    return;
-                                }
+                    if (count >= MaxInstances)
+                    {
+                        TruncatedLastBuild = true;
+                        return;
+                    }
 
-                                Vector3 center = CellCenterWorld(x, y, z, volume.SizeX, volume.SizeY, volume.SizeZ, cellSize);
+                    Vector3 center = CellCenterWorld(x, y, z, volume.SizeX, volume.SizeY, volume.SizeZ, cellSize);
 
                     Matrix4x4 world = Matrix4x4.Multiply(
                         Matrix4x4.CreateScale(cellSize, cellSize, cellSize),
@@ -61,10 +61,11 @@ public sealed class VoxelMeshBaker
 
                     float inv255 = 1f / 255f;
                     var tint = new Color4(v.R * inv255, v.G * inv255, v.B * inv255, 1f);
-                    outInstances.Add(new SceneInstance(world, tint));
+                    outInstances.Add(new Graphics.SceneInstance(world, tint));
                     count++;
                 }
             }
         }
     }
 }
+
